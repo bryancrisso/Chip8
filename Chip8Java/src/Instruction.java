@@ -1,38 +1,181 @@
+/**
+ * Instructions that are used by Chip8
+ */
 public enum Instruction
 {
-    _0nnn, //jump to machine code instruction at nnn
-    _00E0, //clear display
-    _00EE, //Return from subroutine
-    _1nnn, //Jump to location nnn
-    _2nnn, //Call subroutine at nnn
-    _3xkk, //Skip next instruction if Vx == kk
-    _4xkk, //Skip next instruction if Vx != kk
-    _5xy0, //Skip next instruction if Vx == Vy
-    _6xkk, //Set Vx = kk
-    _7xkk, //Set Vx = Vx + kk
-    _8xy0, //Vx = Vy
-    _8xy1, //Vx = Vx OR Vy
-    _8xy2, //Vx = Vx AND Vy
-    _8xy3, //Vx = Vx XOR Vy
-    _8xy4, //Vx = Vx + Vy and set VF to 1 if there is an overflow
-    _8xy5, //Vx = Vx - Vy and set VF to 1 if Vx > Vy
-    _8xy6, //Logical shift Vx to the right. If the least significant bit of Vx is 1, set VF to 1
-    _8xy7, //Vx = Vy - Vx and set VF to 1 if Vy > Vx
-    _8xyE, //Logical shift Vx to the left. If the most significant bit of Vx is 1, set VF to 1.
-    _9xy0, //Skip next instruction if Vx != Vy
-    _Annn, //Set I = nnn
-    _Bnnn, //Jump to location nnn + V0
-    _Cxkk, //Set Vx = random byte AND kk
-    _Dxyn, //Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision
-    _Ex9E, //Skip next instruction if key with the value of Vx is pressed
-    _ExA1, //Skip next instruction if key with the value of Vx is not pressed
-    _Fx07, //Set Vx = delay timer value
-    _Fx0A, //Wait for a key press, store the value of the key in Vx
-    _Fx15, //Set delay timer = Vx
-    _Fx18, //Set sound timer = Vx
-    _Fx1E, //Set I = I + Vx
-    _Fx29, //Set I = location of sprite for digit Vx
-    _Fx33, //Store BCD representation of Vx in memory locations I, I+1, I+2
-    _Fx55, //Store registers V0 through Vx in memory starting at location I
-    _Fx65 //Read registers V0 through Vx from memory starting at location I
+    /**
+     * jump to machine code instruction at nnn
+     * 0nnn
+     */
+    SYS,
+    /**
+     * clear display
+     * 00E0
+     */
+    CLS,
+    /**
+     * Return from subroutine
+     * 00EE
+     */
+    RET,
+    /**
+     * Jump to location nnn
+     * 1nnn
+     */
+    JPn,
+    /**
+     * Call subroutine at nnn
+     * 2nnn
+     */
+    CALL,
+    /**
+     * Skip next instruction if Vx == kk
+     * 2xkk
+     */
+    SExb,
+    /**
+     * Skip next instruction if Vx != kk
+     * 4xkk
+     */
+    SNExb,
+    /**
+     * Skip next instruction if Vx == Vy
+     * 5xy0
+     */
+    SExy,
+    /**
+     * Set Vx = kk
+     * 6xkk
+     */
+    LDxb,
+    /**
+     * Set Vx = Vx + kk
+     * 7xkk
+     */
+    ADDxb,
+    /**
+     * Vx = Vy
+     * 8xy0
+     */
+    LDxy,
+    /**
+     * Vx = Vx OR Vy
+     * 8xy1
+     */
+    OR,
+    /**
+     * Vx = Vx AND Vy
+     * 8xy2
+     */
+    AND,
+    /**
+     * Vx = Vx XOR Vy
+     * 8xy3
+     */
+    XOR,
+    /**
+     * Vx = Vx + Vy and set VF to 1 if there is an overflow
+     * 8xy4
+     */
+    ADDxy,
+    /**
+     * Vx = Vx - Vy and set VF to 1 if Vx > Vy
+     * 8xy5
+     */
+    SUBxy,
+    /**
+     * Logical shift Vx to the right. If the least significant bit of Vx is 1, set VF to 1
+     * 8xy6
+     */
+    SHR,
+    /**
+     * Vx = Vy - Vx and set VF to 1 if Vy > Vx
+     * 8xy7
+     */
+    SUBN,
+    /**
+     * Logical shift Vx to the left. If the most significant bit of Vx is 1, set VF to 1.
+     * 8xyE
+     */
+    SHL,
+    /**
+     * Skip next instruction if Vx != Vy
+     * 9xy0
+     */
+    SNExy,
+    /**
+     * Set I = nnn
+     * Annn
+     */
+    LDI,
+    /**
+     * Jump to location nnn + V0
+     * Bnnn
+     */
+    JPVn,
+    /**
+     * Set Vx = random byte AND kk
+     * Cxkk
+     */
+    RND,
+    /**
+     * Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision
+     * Dxyn
+     */
+    DRW,
+    /**
+     * Skip next instruction if key with the value of Vx is pressed
+     * Ex9E
+     */
+    SKP,
+    /**
+     * Skip next instruction if key with the value of Vx is not pressed
+     * ExA1
+     */
+    SKNP,
+    /**
+     * Set Vx = delay timer value
+     * Fx07
+     */
+    LDxDT,
+    /**
+     * Wait for a key press, store the value of the key in Vx
+     * Fx0A
+     */
+    LDKx,
+    /**
+     * Set delay timer = Vx
+     * Fx15
+     */
+    LDDTx,
+    /**
+     * Set sound timer = Vx
+     * Fx18
+     */
+    LDST,
+    /**
+     * Set I = I + Vx
+     * Fx1E
+     */
+    ADDI,
+    /**
+     * Set I = location of sprite for digit Vx
+     * Fx29
+     */
+    LDF,
+    /**
+     * Store BCD representation of Vx in memory locations I, I+1, I+2
+     * Fx33
+     */
+    LDB,
+    /**
+     * Store registers V0 through Vx in memory starting at location I
+     * Fx55
+     */
+    LDIx,
+    /**
+     * Read registers V0 through Vx from memory starting at location I
+     * Fx65
+     */
+    LDxI
 }

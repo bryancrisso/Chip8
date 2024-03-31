@@ -42,13 +42,11 @@ public class Chip8
         return (short) ins;
     }
 
-    public Instruction decode(short instruction)
-    {
-        return InstructionDecode.decodeInstruction(instruction);
-    }
-
     public void execute(short instruction, Instruction type)
     {
+        switch (type)
+        {
 
+        }
     }
 }
