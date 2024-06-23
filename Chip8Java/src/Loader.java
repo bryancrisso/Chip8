@@ -7,7 +7,7 @@ public class Loader
 {
     public static byte[] readInstructions(String fname)
     {
-        byte[] instructions = new byte[0];
+        byte[] instructions = null;
         try
         {
             Path file = Paths.get(fname);

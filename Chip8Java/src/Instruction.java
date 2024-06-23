@@ -4,11 +4,6 @@
 public enum Instruction
 {
     /**
-     * jump to machine code instruction at nnn
-     * 0nnn
-     */
-    SYS,
-    /**
      * clear display
      * 00E0
      */
@@ -18,6 +13,11 @@ public enum Instruction
      * 00EE
      */
     RET,
+    /**
+     * jump to machine code instruction at nnn
+     * 0nnn
+     */
+    SYS,
     /**
      * Jump to location nnn
      * 1nnn
@@ -30,7 +30,7 @@ public enum Instruction
     CALL,
     /**
      * Skip next instruction if Vx == kk
-     * 2xkk
+     * 3xkk
      */
     SExb,
     /**
@@ -142,7 +142,7 @@ public enum Instruction
      * Wait for a key press, store the value of the key in Vx
      * Fx0A
      */
-    LDKx,
+    LDxK,
     /**
      * Set delay timer = Vx
      * Fx15
