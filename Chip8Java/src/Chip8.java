@@ -1,34 +1,47 @@
-import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
+import java.awt.event.KeyEvent;
 
 public class Chip8
 {
     private final byte[] V = new byte[16];
     private short I;
-    private byte DT;
-    private byte ST;
     private short PC;
     private byte SP = 0;
     private final short[] stack = new short[16];
+
+    private byte DT;
+    private byte ST;
+    // last time since we clock cycled
+    private double lastDecrement = 0;
+    // CPU clock speed in Hz
+    private final double speed;
+
     private final byte[] memory = new byte[4096];
+
     private final String romFname;
     private final Random rand;
-    private final int[] displayBuffer = new int[64*32];
+
     private final int VIDEO_HEIGHT = 32;
     private final int VIDEO_WIDTH = 64;
-    private final boolean[] keys = new boolean[16];
+    private final int[] displayBuffer = new int[VIDEO_WIDTH*VIDEO_HEIGHT];
 
-    public Chip8(String romName)
+    private final boolean[] keys = new boolean[16];
+    private final Map<Integer, Integer> keymap = new HashMap<>();
+
+    public Chip8(String romName, double clockSpeed)
     {
         romFname = romName;
         rand = new Random();
+        speed = clockSpeed;
         init();
     }
 
     public void init()
     {
+
         // Setup memory
         byte[] instructions = Loader.readInstructions(romFname);
 
@@ -60,28 +73,45 @@ public class Chip8
 
         System.arraycopy(hexCodes, 0, memory, 0, hexCodes.length);
 
+        // Populate keymap
+
+        keymap.put(KeyEvent.VK_1, 0x1);
+        keymap.put(KeyEvent.VK_2, 0x2);
+        keymap.put(KeyEvent.VK_3, 0x3);
+        keymap.put(KeyEvent.VK_4, 0xC);
+        keymap.put(KeyEvent.VK_Q, 0x4);
+        keymap.put(KeyEvent.VK_W, 0x5);
+        keymap.put(KeyEvent.VK_E, 0x6);
+        keymap.put(KeyEvent.VK_R, 0xD);
+        keymap.put(KeyEvent.VK_A, 0x7);
+        keymap.put(KeyEvent.VK_S, 0x8);
+        keymap.put(KeyEvent.VK_D, 0x9);
+        keymap.put(KeyEvent.VK_F, 0xE);
+        keymap.put(KeyEvent.VK_Z, 0xA);
+        keymap.put(KeyEvent.VK_X, 0x0);
+        keymap.put(KeyEvent.VK_C, 0xB);
+        keymap.put(KeyEvent.VK_V, 0xF);
+
         // Start an output window
 
-        // Start an input method
+        EmulatorWindow window = new EmulatorWindow(displayBuffer, 640, 320, 64, 32, keymap, keys);
+        window.paint(window.getGraphics());
 
         // Fetch-Decode-Execute Cycle
 
         while (PC < memory.length-1)
         {
-            cycle();
-            if (PC == 988)
+            // making sure that we are running at the correct speed
+            double currTime = System.currentTimeMillis();
+            double elapsedTime = currTime - lastDecrement;
+            if (elapsedTime > (1/speed) * 1000)
             {
-                System.out.println("DONE");
-                try
-                {
-                    PPMWriter.intarrToPPM(new File("/home/bryancrisso/Documents/Chip8/ROMGenerator/out.ppm"),
-                            displayBuffer, VIDEO_WIDTH, VIDEO_HEIGHT);
-                }
-                catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
-                break;
+                cycle();
+
+                // paint graphics to screen
+                window.paint(window.getGraphics());
+
+                lastDecrement = currTime;
             }
         }
 
@@ -91,22 +121,24 @@ public class Chip8
 
     public void cycle()
     {
-        // one fetch decode execute loop
 
-        short ins = fetch();
+            // one fetch decode execute loop
 
-        PC += 2;
+            short ins = fetch();
 
-        try
-        {
-            execute(ins, InsDecode.decodeInstruction(ins));
-        }
-        catch (UnknownInstructionError e)
-        {
-            e.printStackTrace();
-        }
+            PC += 2;
 
-        // decrement sound and delay timers
+            try
+            {
+                execute(ins, InsDecode.decodeInstruction(ins));
+            }
+            catch (UnknownInstructionError e)
+            {
+                e.printStackTrace();
+            }
+            // decrement sound and delay timers
+            if (DT > 0) DT--;
+            if (ST > 0) {ST--; System.out.println("Beep");}
     }
 
     public short fetch()
@@ -218,7 +250,8 @@ public class Chip8
                     {
                         byte spritePixel = (byte)(spriteRow & (0x80 >> col));
 
-                        int bufferPos = (yPos + row) * VIDEO_WIDTH + (xPos + col);
+                        // make sure to mod it so it wraps around
+                        int bufferPos = ((yPos + row) * VIDEO_WIDTH + (xPos + col)) % displayBuffer.length;
 
                         int screenPixel = displayBuffer[bufferPos];
 
@@ -236,7 +269,21 @@ public class Chip8
             case SKP -> {if (keys[Byte.toUnsignedInt(V[x])]) PC += 2;}
             case SKNP -> {if (!keys[Byte.toUnsignedInt(V[x])]) PC += 2;}
             case LDxDT -> V[x] = DT;
-            case LDxK -> System.out.println("Waiting for keypress to store");
+            case LDxK -> {
+                boolean keyPress = false;
+                for (int i = 0; i < keys.length; i++)
+                {
+                    if (keys[i])
+                    {
+                        V[x] = (byte) i;
+                        keyPress = true;
+                    }
+                }
+                if (!keyPress)
+                {
+                    PC -= 2;
+                }
+            }
             case LDDTx -> DT = V[x];
             case LDST -> ST = V[x];
             case ADDI -> I += V[x];
@@ -249,17 +296,11 @@ public class Chip8
             }
             case LDIx ->
             {
-                for (int i = 0; i <= x; i++)
-                {
-                    memory[I+i] = V[i];
-                }
+                if (x + 1 >= 0) System.arraycopy(V, 0, memory, I, x + 1);
             }
             case LDxI ->
             {
-                for (int i = 0; i <= x; i++)
-                {
-                    V[i] = memory[I+i];
-                }
+                if (x + 1 >= 0) System.arraycopy(memory, I, V, 0, x + 1);
             }
         }
     }
