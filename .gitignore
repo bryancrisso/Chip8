@@ -82,3 +82,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+### Chip 8 Specific ###
+chip8-roms
+CHIP-8
