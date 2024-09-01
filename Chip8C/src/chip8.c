@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <instructions.h>
 #include <chip8.h>
@@ -226,7 +227,7 @@ int execute(unsigned short ins)
             break;
         default:
             // Handle unknown instruction
-            printf("Unknown instruction 0x%x", ins);
+            printf("Unknown instruction 0x%x\n", ins);
             return -1;
     }
     return 0;
@@ -342,4 +343,74 @@ int decode_ins(unsigned short ins)
             return -1;
     }
     return -1;
+}
+
+unsigned short fetch()
+{
+    unsigned short ins = 0;
+    ins |= memory[PC] << 8;
+    ins |= memory[PC+1];
+    return ins;
+}
+
+void cycle()
+{
+    // one FDE loop
+
+    unsigned short ins = fetch();
+    PC += 2;
+    
+    if (execute(ins) == -1)
+    {
+        printf("Error occurred.\n");
+        return;
+    }
+
+    //decrement sound and delay timers
+
+    if (DT > 0) DT--;
+    if (ST > 0) {ST--; printf("Beep.\n");}
+}
+
+void init()
+{
+    PC = 512;
+
+    //load hex digit sprites into interpreter space
+
+    unsigned char hex_codes[80] = 
+    {
+        0xF0,  0x90,  0x90,  0x90,  0xF0, // 0
+        0x20,  0x60,  0x20,  0x20,  0x70, // 1
+        0xF0,  0x10,  0xF0,  0x80,  0xF0, // 2
+        0xF0,  0x10,  0xF0,  0x10,  0xF0, // 3
+        0x90,  0x90,  0xF0,  0x10,  0x10, // 4
+        0xF0,  0x80,  0xF0,  0x10,  0xF0, // 5
+        0xF0,  0x80,  0xF0,  0x90,  0xF0, // 6
+        0xF0,  0x10,  0x20,  0x40,  0x40, // 7
+        0xF0,  0x90,  0xF0,  0x90,  0xF0, // 8
+        0xF0,  0x90,  0xF0,  0x10,  0xF0, // 9
+        0xF0,  0x90,  0xF0,  0x90,  0x90, // A
+        0xE0,  0x90,  0xE0,  0x90,  0xE0, // B
+        0xF0,  0x80,  0x80,  0x80,  0xF0, // C
+        0xE0,  0x90,  0x90,  0x90,  0xE0, // D
+        0xF0,  0x80,  0xF0,  0x80,  0xF0, // E
+        0xF0,  0x80,  0xF0,  0x80,  0x80  // F
+    };
+
+    memcpy(memory, hex_codes, 80);
+
+    // start an output window
+
+    // start input handler
+
+    // FDE Cycle
+
+    while (PC < MEM_SIZE-1)
+    {
+        cycle();
+        nanosleep(&ts, &ts);
+    }
+
+    printf("END\n");
 }
