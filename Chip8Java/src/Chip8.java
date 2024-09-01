@@ -216,7 +216,7 @@ public class Chip8
                 {
                     V[0xF] = 0;
                 }
-                V[y] -= V[x];
+                V[x] = V[y] -= V[x];
             }
             case SHL ->
             {
