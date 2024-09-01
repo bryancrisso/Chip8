@@ -1,16 +1,14 @@
 #include <stdio.h>
 
-#include "chip8.h"
+#include <chip8.h>
+
+int load_rom(char *filename, unsigned char *memory_buf, int start_loc);
 
 int main()
 {
-    const int mem_size = 4096;
-
-    unsigned char memory[4096] = {0};
-
     load_rom("/home/bryanak/Documents/fun/Chip8/ROMGenerator/test2.ch8", memory, 0x200);
 
-    for (int i = 0; i < mem_size; i++)
+    for (int i = 0; i < MEM_SIZE; i++)
     {
         printf("%x|", memory[i]);
     }

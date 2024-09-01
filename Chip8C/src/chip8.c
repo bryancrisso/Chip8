@@ -1,8 +1,31 @@
-#include "instructions.h"
-#include "chip8.h"
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-int load_rom(char *filename, unsigned char *memory_buf, int start_loc);
+#include <instructions.h>
+#include <chip8.h>
+
 int decode_ins(unsigned short ins);
+
+unsigned char memory[MEM_SIZE] = {0};
+unsigned char V[16] = {0};
+unsigned short I;
+unsigned short PC;
+unsigned char SP = 0;
+unsigned short stack[16] = {0};
+
+unsigned char DT;
+unsigned char ST;
+    
+// last time since we clock cycled
+float last_decrement = 0;
+// CPU clock speed in Hz
+float speed;
+
+bool display_buf[VIDEO_WIDTH * VIDEO_HEIGHT] = {0};
+
+bool keys[16] = {0};
 
 int execute(unsigned short ins)
 {
@@ -15,113 +38,198 @@ int execute(unsigned short ins)
     {
         case CLS:
             // Clear the display
+            memset(memory, 0, MEM_SIZE);
             break;
         case RET:
             // Return from a subroutine
+            PC = stack[SP--];
             break;
         case SYS:
             // Jump to a machine code routine at nnn
+            // do nothing pls
             break;
         case JPn:
             // Jump to location nnn
+            PC = nnn;
             break;
         case CALL:
             // Call subroutine at nnn
+            stack[++SP] = PC;
+            PC = nnn;
             break;
         case SExb:
             // Skip next instruction if Vx == kk
+            if (V[x] == kk) PC += 2;
             break;
         case SNExb:
             // Skip next instruction if Vx != kk
+            if (V[x] != kk) PC += 2;
             break;
         case SExy:
             // Skip next instruction if Vx == Vy
+            if (V[x] == V[y]) PC += 2;
             break;
         case LDxb:
             // Set Vx = kk
+            V[x] = kk;
             break;
         case ADDxb:
             // Set Vx = Vx + kk
+            V[x] += kk;
             break;
         case LDxy:
             // Set Vx = Vy
+            V[x] = V[y];
             break;
         case OR:
             // Set Vx = Vx OR Vy
+            V[x] |= V[y];
             break;
         case AND:
             // Set Vx = Vx AND Vy
+            V[x] &= V[y];
             break;
         case XOR:
             // Set Vx = Vx XOR Vy
+            V[x] ^= V[y];
             break;
         case ADDxy:
             // Set Vx = Vx + Vy, set VF = carry
+            V[x] += V[y];
+            V[0xF] = ((int)V[x] + (int)V[y]) > 255 ? 1 : 0;
             break;
         case SUBxy:
             // Set Vx = Vx - Vy, set VF = NOT borrow
+            V[0xF] = V[x] > V[y] ? 1 : 0;
+            V[x] -= V[y];
             break;
         case SHR:
             // Set Vx = Vx SHR 1
+            V[0xF] = V[x] & 1;
+            V[x] >>= 1;
             break;
         case SUBN:
             // Set Vx = Vy - Vx, set VF = NOT borrow
+            V[0xF] = V[y] > V[x] ? 1 : 0;
+            V[x] = V[y] - V[x];
             break;
         case SHL:
             // Set Vx = Vx SHL 1
+            V[0xF] = V[x] >> 7;
+            V[x] <<= 1;
             break;
         case SNExy:
             // Skip next instruction if Vx != Vy
+            if (V[x] != V[y]) PC += 2;
             break;
         case LDI:
             // Set I = nnn
+            I = nnn;
             break;
         case JPVn:
             // Jump to location nnn + V0
+            PC = nnn + V[0];
             break;
         case RND:
             // Set Vx = random byte AND kk
+            V[x] = ((unsigned char) rand()) & kk;
             break;
         case DRW:
             // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision
+            unsigned char height = ins & 0xF;
+            int x_pos = V[x] % VIDEO_WIDTH;
+            int y_pos = V[y] % VIDEO_HEIGHT;
+
+            V[0xF] = 0;
+
+            for (int row = 0; row < height; row++)
+            {
+                unsigned char sprite_row = memory[I+row];
+                for (int col = 0; col < 8; col++)
+                {
+                    unsigned char sprite_pixel = sprite_row & (0x80 >> col);
+
+                    // make sure to mod it so it wraps around
+                    int buffer_pos = ((y_pos + row) * VIDEO_WIDTH + (x_pos + col)) % (VIDEO_HEIGHT*VIDEO_WIDTH);
+
+                    int screen_pixel = display_buf[buffer_pos];
+
+                    if(sprite_pixel > 0)
+                    {
+                        if (screen_pixel == 1)
+                        {
+                            V[0xF] = 1;
+                        }
+                        display_buf[buffer_pos] ^= 1;
+                    }
+                }
+            }
+
             break;
         case SKNP:
             // Skip next instruction if key with the value of Vx is not pressed
+            if (keys[V[x]]) PC += 2;
             break;
         case SKP:
             // Skip next instruction if key with the value of Vx is pressed
+            if (!keys[V[x]]) PC += 2;
             break;
         case LDxDT:
             // Set Vx = delay timer value
+            V[x] = DT;
             break;
         case LDxK:
             // Wait for a key press, store the value of the key in Vx
+            bool key_press = false;
+            for (unsigned char i = 0; i < 16; i++)
+            {
+                if (keys[i])
+                {
+                    V[x] = i;
+                    key_press = true;
+                }
+            }
+            if (!key_press)
+            {
+                PC -= 2;
+            }
             break;
         case LDDTx:
             // Set delay timer = Vx
+            DT = V[x];
             break;
         case LDST:
             // Set sound timer = Vx
+            ST = V[x];
             break;
         case ADDI:
             // Set I = I + Vx
+            I += V[x];
             break;
         case LDF:
             // Set I = location of sprite for digit Vx
+            I = V[x]*5;
             break;
         case LDB:
             // Store BCD representation of Vx in memory locations I, I+1, and I+2
+            memory[I] = (V[x]/100)%10;
+            memory[I+1] = (V[x]/10)%10;
+            memory[I+2] = V[x]%10;
             break;
         case LDIx:
             // Store registers V0 through Vx in memory starting at location I
+            memcpy(memory + I, V, x+1);
             break;
         case LDxI:
             // Read registers V0 through Vx from memory starting at location I
+            memcpy(V, memory + I, x+1);
             break;
         default:
             // Handle unknown instruction
+            printf("Unknown instruction 0x%x", ins);
             return -1;
-        }
+    }
+    return 0;
 }
 
 /**

@@ -5,7 +5,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g -Iinc
 
 # Source files
-SRCS = src/main.c
+SRCS = src/main.c src/chip8.c
 
 # Object files
 OBJS = $(SRCS:src/%.c=out/%.o)
