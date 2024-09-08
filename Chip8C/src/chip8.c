@@ -4,31 +4,17 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <instructions.h>
 #include <chip8.h>
+#include <instructions.h>
 
 int decode_ins(unsigned short ins);
 
-unsigned char memory[MEM_SIZE] = {0};
-unsigned char V[16] = {0};
-unsigned short I;
-unsigned short PC;
-unsigned char SP = 0;
-unsigned short stack[16] = {0};
+struct timespec ts = {
+    .tv_sec = DELAY_MS / 1000,
+    .tv_nsec = (DELAY_MS % 1000) * 1000000
+};
 
-unsigned char DT;
-unsigned char ST;
-    
-// last time since we clock cycled
-float last_decrement = 0;
-// CPU clock speed in Hz
-float speed;
-
-bool display_buf[VIDEO_WIDTH * VIDEO_HEIGHT] = {0};
-
-bool keys[16] = {0};
-
-int execute(unsigned short ins)
+int execute(unsigned short ins, struct chip8 *c8)
 {
     unsigned char x = (ins & 0xF00) >> 8;
     unsigned char y = (ins & 0xF0) >> 4;
@@ -37,115 +23,115 @@ int execute(unsigned short ins)
     
     switch(decode_ins(ins))
     {
-        case CLS:
-            // Clear the display
-            memset(memory, 0, MEM_SIZE);
-            break;
-        case RET:
-            // Return from a subroutine
-            PC = stack[SP--];
-            break;
         case SYS:
             // Jump to a machine code routine at nnn
             // do nothing pls
             break;
+        case CLS:
+            // Clear the display
+            memset(c8->display_buf, 0, VIDEO_HEIGHT*VIDEO_WIDTH);
+            return DRAW_FLAG;
+        case RET:
+            // Return from a subroutine
+            c8->PC = c8->stack[c8->SP--];
+            break;
         case JPn:
             // Jump to location nnn
-            PC = nnn;
+            c8->PC = nnn;
             break;
         case CALL:
             // Call subroutine at nnn
-            stack[++SP] = PC;
-            PC = nnn;
+            c8->stack[++c8->SP] = c8->PC;
+            c8->PC = nnn;
             break;
         case SExb:
             // Skip next instruction if Vx == kk
-            if (V[x] == kk) PC += 2;
+            if (c8->V[x] == kk) c8->PC += 2;
             break;
         case SNExb:
             // Skip next instruction if Vx != kk
-            if (V[x] != kk) PC += 2;
+            if (c8->V[x] != kk) c8->PC += 2;
             break;
         case SExy:
             // Skip next instruction if Vx == Vy
-            if (V[x] == V[y]) PC += 2;
+            if (c8->V[x] == c8->V[y]) c8->PC += 2;
             break;
         case LDxb:
             // Set Vx = kk
-            V[x] = kk;
+            c8->V[x] = kk;
             break;
         case ADDxb:
             // Set Vx = Vx + kk
-            V[x] += kk;
+            c8->V[x] += kk;
             break;
         case LDxy:
             // Set Vx = Vy
-            V[x] = V[y];
+            c8->V[x] = c8->V[y];
             break;
         case OR:
             // Set Vx = Vx OR Vy
-            V[x] |= V[y];
+            c8->V[x] |= c8->V[y];
             break;
         case AND:
             // Set Vx = Vx AND Vy
-            V[x] &= V[y];
+            c8->V[x] &= c8->V[y];
             break;
         case XOR:
             // Set Vx = Vx XOR Vy
-            V[x] ^= V[y];
+            c8->V[x] ^= c8->V[y];
             break;
         case ADDxy:
             // Set Vx = Vx + Vy, set VF = carry
-            V[x] += V[y];
-            V[0xF] = ((int)V[x] + (int)V[y]) > 255 ? 1 : 0;
+            c8->V[0xF] = ((int)c8->V[x] + (int)c8->V[y]) > 255 ? 1 : 0;
+            c8->V[x] += c8->V[y];
             break;
         case SUBxy:
             // Set Vx = Vx - Vy, set VF = NOT borrow
-            V[0xF] = V[x] > V[y] ? 1 : 0;
-            V[x] -= V[y];
+            c8->V[0xF] = c8->V[x] > c8->V[y] ? 1 : 0;
+            c8->V[x] -= c8->V[y];
             break;
         case SHR:
             // Set Vx = Vx SHR 1
-            V[0xF] = V[x] & 1;
-            V[x] >>= 1;
+            c8->V[0xF] = c8->V[x] & 1;
+            c8->V[x] >>= 1;
             break;
         case SUBN:
             // Set Vx = Vy - Vx, set VF = NOT borrow
-            V[0xF] = V[y] > V[x] ? 1 : 0;
-            V[x] = V[y] - V[x];
+            c8->V[0xF] = c8->V[y] > c8->V[x] ? 1 : 0;
+            c8->V[x] = c8->V[y] - c8->V[x];
             break;
         case SHL:
             // Set Vx = Vx SHL 1
-            V[0xF] = V[x] >> 7;
-            V[x] <<= 1;
+            c8->V[0xF] = (c8->V[x] >> 7) & 0x1;
+            c8->V[x] <<= 1;
             break;
         case SNExy:
             // Skip next instruction if Vx != Vy
-            if (V[x] != V[y]) PC += 2;
+            if (c8->V[x] != c8->V[y]) c8->PC += 2;
             break;
         case LDI:
             // Set I = nnn
-            I = nnn;
+            c8->I = nnn;
             break;
         case JPVn:
             // Jump to location nnn + V0
-            PC = nnn + V[0];
+            c8->PC = nnn + c8->V[0];
             break;
         case RND:
             // Set Vx = random byte AND kk
-            V[x] = ((unsigned char) rand()) & kk;
+            c8->V[x] = ((unsigned char) rand()) & kk;
             break;
         case DRW:
-            // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision
+            // Display n-byte c8->SPrite starting at memory location I at (Vx, Vy), set VF = collision
             unsigned char height = ins & 0xF;
-            int x_pos = V[x] % VIDEO_WIDTH;
-            int y_pos = V[y] % VIDEO_HEIGHT;
+            int x_pos = c8->V[x] % VIDEO_WIDTH;
+            int y_pos = c8->V[y] % VIDEO_HEIGHT;
 
-            V[0xF] = 0;
+            c8->V[0xF] = 0;
 
             for (int row = 0; row < height; row++)
             {
-                unsigned char sprite_row = memory[I+row];
+                unsigned char sprite_row = c8->memory[c8->I+row];
                 for (int col = 0; col < 8; col++)
                 {
                     unsigned char sprite_pixel = sprite_row & (0x80 >> col);
@@ -153,77 +139,76 @@ int execute(unsigned short ins)
                     // make sure to mod it so it wraps around
                     int buffer_pos = ((y_pos + row) * VIDEO_WIDTH + (x_pos + col)) % (VIDEO_HEIGHT*VIDEO_WIDTH);
 
-                    int screen_pixel = display_buf[buffer_pos];
+                    int screen_pixel = c8->display_buf[buffer_pos];
 
                     if(sprite_pixel > 0)
                     {
                         if (screen_pixel == 1)
                         {
-                            V[0xF] = 1;
+                            c8->V[0xF] = 1;
                         }
-                        display_buf[buffer_pos] ^= 1;
+                        c8->display_buf[buffer_pos] ^= 1;
                     }
                 }
             }
-
-            break;
+            return DRAW_FLAG;
         case SKNP:
             // Skip next instruction if key with the value of Vx is not pressed
-            if (keys[V[x]]) PC += 2;
+            if (!c8->keys[c8->V[x]]) c8->PC += 2;
             break;
         case SKP:
             // Skip next instruction if key with the value of Vx is pressed
-            if (!keys[V[x]]) PC += 2;
+            if (c8->keys[c8->V[x]]) c8->PC += 2;
             break;
         case LDxDT:
             // Set Vx = delay timer value
-            V[x] = DT;
+            c8->V[x] = c8->DT;
             break;
         case LDxK:
             // Wait for a key press, store the value of the key in Vx
             bool key_press = false;
             for (unsigned char i = 0; i < 16; i++)
             {
-                if (keys[i])
+                if (c8->keys[i])
                 {
-                    V[x] = i;
+                    c8->V[x] = i;
                     key_press = true;
                 }
             }
             if (!key_press)
             {
-                PC -= 2;
+                c8->PC -= 2;
             }
             break;
         case LDDTx:
             // Set delay timer = Vx
-            DT = V[x];
+            c8->DT = c8->V[x];
             break;
         case LDST:
             // Set sound timer = Vx
-            ST = V[x];
+            c8->ST = c8->V[x];
             break;
         case ADDI:
             // Set I = I + Vx
-            I += V[x];
+            c8->I += c8->V[x];
             break;
         case LDF:
-            // Set I = location of sprite for digit Vx
-            I = V[x]*5;
+            // Set I = location of c8->SPrite for digit Vx
+            c8->I = c8->V[x]*5;
             break;
         case LDB:
             // Store BCD representation of Vx in memory locations I, I+1, and I+2
-            memory[I] = (V[x]/100)%10;
-            memory[I+1] = (V[x]/10)%10;
-            memory[I+2] = V[x]%10;
+            c8->memory[c8->I] = (c8->V[x]/100)%10;
+            c8->memory[c8->I+1] = (c8->V[x]/10)%10;
+            c8->memory[c8->I+2] = c8->V[x]%10;
             break;
         case LDIx:
             // Store registers V0 through Vx in memory starting at location I
-            memcpy(memory + I, V, x+1);
+            memcpy(c8->memory + c8->I, c8->V, x+1);
             break;
         case LDxI:
             // Read registers V0 through Vx from memory starting at location I
-            memcpy(V, memory + I, x+1);
+            memcpy(c8->V, c8->memory + c8->I, x+1);
             break;
         default:
             // Handle unknown instruction
@@ -305,12 +290,12 @@ int decode_ins(unsigned short ins)
             return DRW;
         
         case 0xE:
-            switch (ins & 0xF)
+            switch (ins & 0xFF)
             {
-                case 1:
-                    return SKNP;
-                case 2:
+                case 0x9E:
                     return SKP;
+                case 0xA1:
+                    return SKNP;
                 default:
                     return -1;
             }
@@ -333,7 +318,7 @@ int decode_ins(unsigned short ins)
                 case 0x33:
                     return LDB;
                 case 0x55:
-                    return LDI;
+                    return LDIx;
                 case 0x65:
                     return LDxI;
                 default:
@@ -345,38 +330,47 @@ int decode_ins(unsigned short ins)
     return -1;
 }
 
-unsigned short fetch()
+unsigned short fetch(struct chip8 *c8)
 {
     unsigned short ins = 0;
-    ins |= memory[PC] << 8;
-    ins |= memory[PC+1];
+    ins |= c8->memory[c8->PC] << 8;
+    ins |= c8->memory[c8->PC+1];
     return ins;
 }
 
-void cycle()
+int cycle(struct chip8 *c8)
 {
     // one FDE loop
+    int draw_flag = 0;
 
-    unsigned short ins = fetch();
-    PC += 2;
+    unsigned short ins = fetch(c8);
+    c8->PC += 2;
     
-    if (execute(ins) == -1)
+    draw_flag = execute(ins, c8);
+
+    if (draw_flag == -1)
     {
         printf("Error occurred.\n");
-        return;
+    }
+
+    if (c8->PC == MEM_SIZE-2)
+    {
+        printf("End of memory reached.\n");
+        draw_flag = -1;
     }
 
     //decrement sound and delay timers
 
-    if (DT > 0) DT--;
-    if (ST > 0) {ST--; printf("Beep.\n");}
+    if (c8->DT > 0) c8->DT--;
+    if (c8->ST > 0) {c8->ST--; }
+    return draw_flag;
 }
 
-void init()
+void init(struct chip8 *c8)
 {
-    PC = 512;
+    c8->PC = 512;
 
-    //load hex digit sprites into interpreter space
+    //load hex digit c8->SPrites into interpreter c8->SPace
 
     unsigned char hex_codes[80] = 
     {
@@ -398,19 +392,5 @@ void init()
         0xF0,  0x80,  0xF0,  0x80,  0x80  // F
     };
 
-    memcpy(memory, hex_codes, 80);
-
-    // start an output window
-
-    // start input handler
-
-    // FDE Cycle
-
-    while (PC < MEM_SIZE-1)
-    {
-        cycle();
-        nanosleep(&ts, &ts);
-    }
-
-    printf("END\n");
+    memcpy(c8->memory, hex_codes, 80);
 }
