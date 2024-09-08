@@ -1,17 +1,43 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <chip8.h>
+#include <peripherals.h>
 
 int load_rom(char *filename, unsigned char *memory_buf, int start_loc);
 
 int main()
 {
-    load_rom("/home/bryanak/Documents/fun/Chip8/ROMGenerator/test2.ch8", memory, 0x200);
+    struct chip8 *c8 = malloc(sizeof(struct chip8));
 
-    for (int i = 0; i < MEM_SIZE; i++)
+    int should_quit = 0;
+
+    // load_rom("/home/bryanak/Documents/fun/Chip8/ROMGenerator/test_opcode.ch8", c8->memory, 0x200);
+    load_rom("/home/bryanak/Documents/fun/chip8-roms/games/Airplane.ch8", c8->memory, 0x200);
+
+    init(c8);
+
+    // start an output window
+
+    init_display(640, 320, 64, 32);
+
+    // FDE Cycle
+
+    while (should_quit != -1)
     {
-        printf("%x|", memory[i]);
+        should_quit = cycle(c8);
+        if (sdl_ehandler(c8->keys) == -1) should_quit = -1;
+
+        if (should_quit == DRAW_FLAG)
+        {
+            draw(c8->display_buf);
+        }
+
+        nanosleep(&ts, &ts);
     }
+
+    free(c8);
+    stop_display();
 }
 
 
