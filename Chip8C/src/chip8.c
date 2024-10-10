@@ -10,8 +10,8 @@
 int decode_ins(unsigned short ins);
 
 struct timespec ts = {
-    .tv_sec = DELAY_MS / 1000,
-    .tv_nsec = (DELAY_MS % 1000) * 1000000
+    .tv_sec = DELAY_US / 1000000,
+    .tv_nsec = (DELAY_US % 1000000) * 1000ULL
 };
 
 int execute(unsigned short ins, struct chip8 *c8)

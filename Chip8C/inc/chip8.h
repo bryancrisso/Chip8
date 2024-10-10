@@ -7,7 +7,7 @@
 #define VIDEO_WIDTH 64
 #define VIDEO_HEIGHT 32
 #define CLOCK_HZ 500
-#define DELAY_MS (1000/CLOCK_HZ)
+#define DELAY_US (1000000/CLOCK_HZ)
 #define DRAW_FLAG 3
 
 extern struct timespec ts;
